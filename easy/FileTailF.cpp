@@ -70,8 +70,11 @@ void fsw::easy::FileTailF::startup() {
     if (nullptr == m_monitor) {
         return;
     }
-
-    m_monitor->start();
+    try {
+        m_monitor->start();
+    } catch (fsw::libfsw_exception& ex) {
+        // no idea.
+    }
 
     for (auto& item : m_watchers) {
         if (-1 != item.second.fd) {
