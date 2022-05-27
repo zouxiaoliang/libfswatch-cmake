@@ -38,12 +38,14 @@ bool fsw::easy::FileTailF::async_tailf(const std::string& path, Handle recv) {
         if (!inserted.second) {
             return false;
         }
-        struct stat s;
-        if (0 == ::stat(path.c_str(), &s)) {
-            int fd = open(path.c_str(), O_RDONLY);
-            if (-1 != fd) {
-                lseek(fd, 0, SEEK_END);
-                inserted.first->second.fd = fd;
+        if (0 == access(path.c_str(), F_OK)) {
+            struct stat s;
+            if (0 == ::stat(path.c_str(), &s)) {
+                int fd = open(path.c_str(), O_RDONLY);
+                if (-1 != fd) {
+                    lseek(fd, 0, SEEK_END);
+                    inserted.first->second.fd = fd;
+                }
             }
         }
         inserted.first->second.handles.push_back(recv);
@@ -54,6 +56,7 @@ bool fsw::easy::FileTailF::async_tailf(const std::string& path, Handle recv) {
     }
     return true;
 }
+
 void fsw::easy::FileTailF::startup() {
     if (nullptr != m_monitor) {
         return;
@@ -71,6 +74,13 @@ void fsw::easy::FileTailF::startup() {
         return;
     }
     try {
+        std::vector<fsw_event_type_filter> filter{
+            {fsw_event_flag::Updated},
+            {fsw_event_flag::Removed},
+            {fsw_event_flag::Renamed},
+            {fsw_event_flag::MovedTo},
+            {fsw_event_flag::MovedFrom}};
+        m_monitor->set_event_type_filters(filter);
         m_monitor->start();
     } catch (fsw::libfsw_exception& ex) {
         // no idea.
@@ -83,13 +93,18 @@ void fsw::easy::FileTailF::startup() {
         item.second.fd = -1;
     }
 }
+
 void fsw::easy::FileTailF::stop() {
     if (nullptr != m_monitor && m_monitor->is_running()) {
         m_monitor->stop();
+        for (int i = 0; i < 3 && m_monitor->is_running(); ++i) {
+            sleep(1);
+        }
         delete m_monitor;
         m_monitor = nullptr;
     }
 }
+
 void fsw::easy::FileTailF::on_events(const std::vector<fsw::event>& events, void* context) {
     char buffer[129] = {0};
 
@@ -107,7 +122,7 @@ void fsw::easy::FileTailF::on_events(const std::vector<fsw::event>& events, void
         auto& handles = found->second.handles;
 
         for (const auto& flag : event.get_flags()) {
-            // std::cout << " -- " << path << " has changed, flag: " << event.get_event_flag_name(flag) <<
+            // std::cerr << " -- " << path << " has changed, flag: " << event.get_event_flag_name(flag) <<
             // std::endl;
             if (flag == fsw_event_flag::Updated || flag == fsw_event_flag::Renamed || flag == fsw_event_flag::MovedTo) {
                 if (-1 == fd) {
@@ -127,10 +142,16 @@ void fsw::easy::FileTailF::on_events(const std::vector<fsw::event>& events, void
                         handle(buffer, s);
                     }
                 }
+                if (0 != access(event.get_path().c_str(), F_OK)) {
+                    if (-1 != fd) {
+                        close(fd);
+                        fd = -1;
+                    }
+                }
             }
 
             if (flag == fsw_event_flag::Removed || flag == fsw_event_flag::Renamed || flag == fsw_event_flag::MovedTo) {
-                if (-1 == fd) {
+                if (-1 != fd) {
                     close(fd);
                     fd = -1;
                 }

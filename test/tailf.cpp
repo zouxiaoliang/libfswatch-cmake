@@ -9,11 +9,15 @@
 int main(int argc, char* argv[]) {
     std::cout << "Hello world!!!" << std::endl;
 
-    fsw::easy::FileTailF lw;
-    lw.async_tailf("/var/log/audit/audit.log", [](const char* str, size_t length) {
+    if (argc < 1) {
+        std::cout << "usage: " << argv[0] << ", {filepath}" << std::endl;
+        return 0;
+    }
+    fsw::easy::FileTailF fw;
+    fw.async_tailf(argv[1], [](const char* str, size_t length) {
         std::cout << str;
     });
 
-    lw.startup();
+    fw.startup();
     return 0;
 }

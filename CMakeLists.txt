@@ -37,12 +37,16 @@ endfunction(libfswatchEasyMain)
 
 function(tailfMain)
     add_executable(tailf test/tailf.cpp)
-    target_link_libraries(tailf thirdparty_libfswatch_easy thirdparty_toolchain)
-    if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-        target_link_libraries(tailf libunwind.a libc++abi.a libz.a dl rt)
-    endif()
+    target_link_libraries(tailf thirdparty_libfswatch_easy)
 endfunction(tailfMain)
+
+function(auditdlogWatcherMain)
+    add_executable(auditdlog_watcher test/auditdlog_watcher.cpp)
+    target_link_libraries(auditdlog_watcher thirdparty_libfswatch_easy)
+endfunction(auditdlogWatcherMain)
+
 
 libfswatchMain()
 libfswatchEasyMain()
 tailfMain()
+auditdlogWatcherMain()
