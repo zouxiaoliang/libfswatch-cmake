@@ -8,6 +8,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <set>
 
 #include <libfswatch/c++/monitor_factory.hpp>
 
@@ -62,14 +63,22 @@ void fsw::easy::FileTailF::startup() {
         return;
     }
 
-    std::vector<std::string> paths;
+    std::set<std::string> paths;
     for (const auto& item : m_watchers) {
         // std::cout << " -- watch " << item.first << ", obsover: " << item.second.handles.size() << std::endl;
-        paths.push_back(item.first);
+        paths.emplace(item.first);
+        auto found = item.first.rfind("/");
+        if (std::string::npos != found) {
+            paths.emplace(item.first.substr(0, found));
+        }
+    }
+
+    for (const auto &path: paths) {
+        std:: cout << " -- watch filepath: " << path << std::endl;
     }
 
     m_monitor = fsw::monitor_factory::create_monitor(
-        fsw_monitor_type::system_default_monitor_type, paths, FileTailF::on_events, this);
+        fsw_monitor_type::system_default_monitor_type, std::vector<std::string>(paths.begin(), paths.end()), FileTailF::on_events, this);
     if (nullptr == m_monitor) {
         return;
     }
@@ -79,11 +88,15 @@ void fsw::easy::FileTailF::startup() {
             {fsw_event_flag::Removed},
             {fsw_event_flag::Renamed},
             {fsw_event_flag::MovedTo},
+            {fsw_event_flag::Created},
             {fsw_event_flag::MovedFrom}};
         m_monitor->set_event_type_filters(filter);
+        m_monitor->set_latency(0.5);
+        m_monitor->set_bubble_events(true);
+        m_monitor->set_allow_overflow(true);
         m_monitor->start();
     } catch (fsw::libfsw_exception& ex) {
-        // no idea.
+        std::cout << "libfsw exeception: " << ex.what() << std::endl;
     }
 
     for (auto& item : m_watchers) {
@@ -122,13 +135,13 @@ void fsw::easy::FileTailF::on_events(const std::vector<fsw::event>& events, void
         auto& handles = found->second.handles;
 
         for (const auto& flag : event.get_flags()) {
-            // std::cerr << " -- " << path << " has changed, flag: " << event.get_event_flag_name(flag) <<
+            // std::cout << " -- " << path << " has changed, flag: " << event.get_event_flag_name(flag) << ", time: " << ::time(nullptr) <<
             // std::endl;
             if (flag == fsw_event_flag::Updated || flag == fsw_event_flag::Renamed || flag == fsw_event_flag::MovedTo) {
                 if (-1 == fd) {
                     fd = open(event.get_path().c_str(), O_RDONLY);
                     if (-1 == fd) {
-                        // std::cout << "open " << event.get_path() << ", failed" << std::endl;
+                        // std::cout << " -- open " << event.get_path() << ", failed" << std::endl;
                         continue;
                     }
                 }
@@ -150,7 +163,8 @@ void fsw::easy::FileTailF::on_events(const std::vector<fsw::event>& events, void
                 }
             }
 
-            if (flag == fsw_event_flag::Removed || flag == fsw_event_flag::Renamed || flag == fsw_event_flag::MovedTo) {
+            if (flag == fsw_event_flag::Removed || flag == fsw_event_flag::Renamed || flag == fsw_event_flag::MovedTo || flag == fsw_event_flag::Created) {
+                // std::cout << " -- file " << event.get_path() << ", [crated|removed|renamed|moveto], time:" << time(nullptr) << std::endl;
                 if (-1 != fd) {
                     close(fd);
                     fd = -1;

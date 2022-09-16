@@ -16,6 +16,7 @@ int main(int argc, char* argv[]) {
     fsw::easy::FileTailF fw;
     fw.async_tailf(argv[1], [](const char* str, size_t length) {
         std::cout << str;
+        std::flush(std::cout);
     });
 
     fw.startup();
